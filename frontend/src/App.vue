@@ -37,7 +37,7 @@ onMounted(() => {
 <template>
   <main class="page">
     <section class="panel">
-      <h1>CLiProxy API Key 统计面板</h1>
+      <h1>TMs API Key 统计面板</h1>
       <p>页面会自动加载环境变量中固定 API Key 的统计数据。</p>
 
       <div class="toolbar">
