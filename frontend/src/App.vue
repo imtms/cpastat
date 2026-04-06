@@ -48,19 +48,37 @@ onMounted(() => {
 
       <section v-if="stats" class="result">
         <p class="api-key">当前 API Key: {{ stats.api_key_masked }}</p>
+        <p class="api-key">统计时区: {{ stats.timezone }}（今日 {{ stats.today.date }}）</p>
 
+        <h2 class="section-title">今日</h2>
         <div class="cards">
           <article class="card">
             <h2>请求次数</h2>
-            <strong>{{ formatNumber(stats.request_count) }}</strong>
+            <strong>{{ formatNumber(stats.today.request_count) }}</strong>
           </article>
           <article class="card">
             <h2>已用 Token</h2>
-            <strong>{{ formatNumber(stats.total_tokens) }}</strong>
+            <strong>{{ formatNumber(stats.today.total_tokens) }}</strong>
           </article>
           <article class="card">
             <h2>失败请求</h2>
-            <strong>{{ formatNumber(stats.failure_count) }}</strong>
+            <strong>{{ formatNumber(stats.today.failure_count) }}</strong>
+          </article>
+        </div>
+
+        <h2 class="section-title">总计</h2>
+        <div class="cards">
+          <article class="card">
+            <h2>请求次数</h2>
+            <strong>{{ formatNumber(stats.total.request_count) }}</strong>
+          </article>
+          <article class="card">
+            <h2>已用 Token</h2>
+            <strong>{{ formatNumber(stats.total.total_tokens) }}</strong>
+          </article>
+          <article class="card">
+            <h2>失败请求</h2>
+            <strong>{{ formatNumber(stats.total.failure_count) }}</strong>
           </article>
         </div>
 
@@ -69,17 +87,23 @@ onMounted(() => {
             <thead>
               <tr>
                 <th>模型</th>
-                <th>请求数</th>
-                <th>Token</th>
-                <th>失败数</th>
+                <th>今日请求</th>
+                <th>今日 Token</th>
+                <th>今日失败</th>
+                <th>总请求</th>
+                <th>总 Token</th>
+                <th>总失败</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="item in stats.models" :key="item.model">
                 <td>{{ item.model }}</td>
-                <td>{{ formatNumber(item.request_count) }}</td>
-                <td>{{ formatNumber(item.total_tokens) }}</td>
-                <td>{{ formatNumber(item.failure_count) }}</td>
+                <td>{{ formatNumber(item.today.request_count) }}</td>
+                <td>{{ formatNumber(item.today.total_tokens) }}</td>
+                <td>{{ formatNumber(item.today.failure_count) }}</td>
+                <td>{{ formatNumber(item.total.request_count) }}</td>
+                <td>{{ formatNumber(item.total.total_tokens) }}</td>
+                <td>{{ formatNumber(item.total.failure_count) }}</td>
               </tr>
             </tbody>
           </table>
@@ -150,6 +174,12 @@ p {
 .api-key {
   margin: 0 0 14px;
   color: #475b6e;
+}
+
+.section-title {
+  margin: 8px 0 10px;
+  font-size: 18px;
+  color: #284257;
 }
 
 .cards {

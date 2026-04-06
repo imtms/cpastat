@@ -3,6 +3,25 @@ function asInt(value) {
   return Number.isFinite(n) ? n : 0
 }
 
+function resolveTimeZone(raw) {
+  const tz = `${raw || ''}`.trim() || 'Asia/Shanghai'
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz }).format(new Date())
+  } catch {
+    throw new Error('DASHBOARD_TIMEZONE is invalid')
+  }
+  return tz
+}
+
+function formatDateKey(date, timeZone) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date)
+}
+
 function maskApiKey(value) {
   if (!value) return ''
   if (value.length <= 8) return '****'
@@ -24,6 +43,17 @@ function normaliseBaseUrl(value) {
   return raw.replace(/\/$/, '')
 }
 
+function detailTokenTotal(detail) {
+  const totalTokens = asInt(detail?.tokens?.total_tokens)
+  if (totalTokens > 0) return totalTokens
+  return (
+    asInt(detail?.tokens?.input_tokens) +
+    asInt(detail?.tokens?.output_tokens) +
+    asInt(detail?.tokens?.reasoning_tokens) +
+    asInt(detail?.tokens?.cached_tokens)
+  )
+}
+
 function countFailures(details) {
   let count = 0
   for (const detail of details) {
@@ -34,7 +64,7 @@ function countFailures(details) {
   return count
 }
 
-function buildStats(usagePayload, apiKey) {
+function buildStats(usagePayload, apiKey, timeZone) {
   const apis = usagePayload?.usage?.apis
   if (!apis || typeof apis !== 'object' || !(apiKey in apis)) {
     return null
@@ -45,32 +75,76 @@ function buildStats(usagePayload, apiKey) {
 
   const models = []
   let totalFailureCount = 0
+  let todayRequestCount = 0
+  let todayTotalTokens = 0
+  let todayFailureCount = 0
+  const todayKey = formatDateKey(new Date(), timeZone)
 
   for (const [model, modelData] of Object.entries(modelsSnapshot)) {
     const details = Array.isArray(modelData?.details) ? modelData.details : []
     const failureCount = countFailures(details)
     totalFailureCount += failureCount
 
+    let modelTodayRequestCount = 0
+    let modelTodayTotalTokens = 0
+    let modelTodayFailureCount = 0
+
+    for (const detail of details) {
+      const tsRaw = detail?.timestamp
+      if (!tsRaw) continue
+
+      const ts = new Date(tsRaw)
+      if (Number.isNaN(ts.getTime())) continue
+
+      if (formatDateKey(ts, timeZone) !== todayKey) continue
+
+      modelTodayRequestCount += 1
+      modelTodayTotalTokens += detailTokenTotal(detail)
+      if (detail?.failed) {
+        modelTodayFailureCount += 1
+      }
+    }
+
+    todayRequestCount += modelTodayRequestCount
+    todayTotalTokens += modelTodayTotalTokens
+    todayFailureCount += modelTodayFailureCount
+
     models.push({
       model,
-      request_count: asInt(modelData?.total_requests),
-      total_tokens: asInt(modelData?.total_tokens),
-      failure_count: failureCount,
+      total: {
+        request_count: asInt(modelData?.total_requests),
+        total_tokens: asInt(modelData?.total_tokens),
+        failure_count: failureCount,
+      },
+      today: {
+        request_count: modelTodayRequestCount,
+        total_tokens: modelTodayTotalTokens,
+        failure_count: modelTodayFailureCount,
+      },
     })
   }
 
   models.sort((a, b) => {
-    if (b.request_count !== a.request_count) {
-      return b.request_count - a.request_count
+    if (b.total.request_count !== a.total.request_count) {
+      return b.total.request_count - a.total.request_count
     }
     return a.model.localeCompare(b.model)
   })
 
   return {
     api_key_masked: maskApiKey(apiKey),
-    request_count: asInt(apiSnapshot?.total_requests),
-    total_tokens: asInt(apiSnapshot?.total_tokens),
-    failure_count: totalFailureCount,
+    timezone: timeZone,
+    today: {
+      date: todayKey,
+      request_count: todayRequestCount,
+      total_tokens: todayTotalTokens,
+      failure_count: todayFailureCount,
+    },
+    total: {
+      request_count: asInt(apiSnapshot?.total_requests),
+      total_tokens: asInt(apiSnapshot?.total_tokens),
+      failure_count: totalFailureCount,
+    },
     models,
   }
 }
@@ -90,6 +164,14 @@ module.exports = async function handler(req, res) {
   const managementKey = `${process.env.CLIPROXY_MANAGEMENT_KEY || ''}`.trim()
   if (!managementKey) {
     res.status(500).json({ error: 'Server misconfigured: CLIPROXY_MANAGEMENT_KEY is required' })
+    return
+  }
+
+  let dashboardTimeZone
+  try {
+    dashboardTimeZone = resolveTimeZone(process.env.DASHBOARD_TIMEZONE)
+  } catch (error) {
+    res.status(500).json({ error: error.message })
     return
   }
 
@@ -123,7 +205,7 @@ module.exports = async function handler(req, res) {
     }
 
     const usagePayload = await response.json()
-    const stats = buildStats(usagePayload, apiKey)
+    const stats = buildStats(usagePayload, apiKey, dashboardTimeZone)
 
     if (!stats) {
       res.status(404).json({ error: `API key not found in usage snapshot: ${apiKey}` })

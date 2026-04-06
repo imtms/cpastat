@@ -21,8 +21,12 @@ This project is licensed under the [MIT License](./LICENSE).
 2. Vercel Function reads env vars:
 - `CLIPROXY_MANAGEMENT_KEY`
 - `DASHBOARD_API_KEY` (fixed key displayed by dashboard)
+ - `DASHBOARD_TIMEZONE` (optional, used for daily stats split)
 3. Function requests `CLIPROXY_BASE_URL/v0/management/usage`
-4. Function returns fixed-key stats: request count, token count, failure count, per-model breakdown
+4. Function returns fixed-key stats:
+ - `today`: request count, token count, failure count
+ - `total`: cumulative request count, token count, failure count
+ - per-model breakdown for both `today` and `total`
 
 ## Required Environment Variables
 
@@ -35,6 +39,7 @@ Set in Vercel Project Settings -> Environment Variables:
 ## Optional Environment Variables
 
 - `REQUEST_TIMEOUT_MS`: timeout for CLiProxy request (default `15000`)
+- `DASHBOARD_TIMEZONE`: timezone for daily split (default `Asia/Shanghai`)
 
 ## Local Development
 
